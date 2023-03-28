@@ -1,6 +1,6 @@
 The `e3` Project
 ================
-
+sync
 [![Build Status](https://github.com/AdaCore/e3-core/workflows/build/badge.svg)](https://github.com/AdaCore/e3-core/actions?query=branch%3Amaster)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 [![Documentation Status](https://readthedocs.org/projects/e3-core/badge/?version=latest)](http://e3-core.readthedocs.io/en/latest/?badge=latest)
