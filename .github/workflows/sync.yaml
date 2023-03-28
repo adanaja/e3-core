@@ -13,7 +13,5 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: tgymnich/fork-sync@v1.8
-        with:
-          base: master
-          head: master
+      - name: Sync
+        run: gh repo sync git@github.com:adanaja/e3-core.git
