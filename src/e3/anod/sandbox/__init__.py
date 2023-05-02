@@ -18,15 +18,15 @@ logger = e3.log.getLogger("sandbox")
 
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any
 
 
 class SandBox:
     def __init__(self, root_dir: str) -> None:
         self.root_dir: str = os.path.realpath(root_dir)
-        self.build_id: Optional[str] = None
-        self.build_date: Optional[str] = None
-        self.build_version: Optional[str] = None
+        self.build_id: str | None = None
+        self.build_date: str | None = None
+        self.build_version: str | None = None
 
         # Required directories for a sandbox
         self.dirs = (
@@ -51,7 +51,7 @@ class SandBox:
         self.__specs_dir = os.path.join(self.root_dir, "specs")
 
         # Contains the loaded version of user.yaml if present
-        self.user_config: Optional[dict[str, Any]] = None
+        self.user_config: dict[str, Any] | None = None
 
         # For each directory create an attribute containing its path
         for d in self.dirs:
@@ -120,7 +120,7 @@ class SandBox:
         for d in self.dirs:
             mkdir(getattr(self, f"{d}_dir".replace(os.path.sep, "_")))
 
-    def get_build_space(self, name: str, platform: Optional[str] = None) -> BuildSpace:
+    def get_build_space(self, name: str, platform: str | None = None) -> BuildSpace:
         """Get build space.
 
         :param name: build space name
@@ -147,7 +147,7 @@ class SandBox:
             return yaml.safe_load(f)
 
     def write_scripts(self) -> None:
-        from setuptools.command.easy_install import get_script_args
+        from setuptools.command.easy_install import ScriptWriter
 
         # Retrieve sandbox_scripts entry points
         e3_distrib = get_distribution("e3-core")
@@ -161,7 +161,7 @@ class SandBox:
             def as_requirement(self):  # type: ignore
                 return e3_distrib.as_requirement()
 
-        for script in get_script_args(dist=SandboxDist()):
+        for script in ScriptWriter.best().get_args(dist=SandboxDist()):
             script_name = script[0]
             script_content = script[1]
             target = os.path.join(self.bin_dir, script_name)
@@ -171,8 +171,8 @@ class SandBox:
                     "console_scripts", "sandbox_scripts"
                 )
             with open(target, "wb") as f:
-                if isinstance(script_content, str):
-                    f.write(script_content.encode("utf-8"))
+                if isinstance(script_content, bytes):  # type: ignore[unreachable]
+                    f.write(script_content)  # type: ignore[unreachable]
                 else:
-                    f.write(script_content)
+                    f.write(script_content.encode("utf-8"))
             chmod("a+x", target)

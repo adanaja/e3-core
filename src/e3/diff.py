@@ -10,7 +10,6 @@ import e3.log
 import e3.os.process
 
 if TYPE_CHECKING:
-    from typing import Optional
     from collections.abc import Callable
 
 logger = e3.log.getLogger("diff")
@@ -23,7 +22,7 @@ class DiffError(e3.error.E3Error):
 def diff(
     a: str | list[str],
     b: str | list[str],
-    ignore: Optional[str] = None,
+    ignore: str | None = None,
     item1name: str = "expected",
     item2name: str = "output",
     ignore_white_chars: bool = True,
@@ -88,8 +87,8 @@ def diff(
 def patch(
     patch_file: str,
     working_dir: str,
-    discarded_files: Optional[list[str] | Callable[[str], bool]] = None,
-    filtered_patch: Optional[str] = None,
+    discarded_files: list[str] | Callable[[str], bool] | None = None,
+    filtered_patch: str | None = None,
 ) -> None:
     """Apply a patch, ignoring changes in files matching discarded_files.
 
@@ -174,7 +173,6 @@ def patch(
         with open(patch_file, newline="") as f, open(
             filtered_patch, "w", newline=""
         ) as fdout:
-
             # Two line headers that mark beginning of patches
             header1: tuple | tuple[str, str] = ()
             header2: tuple | tuple[str, str] = ()

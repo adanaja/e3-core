@@ -11,8 +11,8 @@ from collections import deque
 import requests
 import requests.adapters
 import requests.exceptions
-import requests.packages.urllib3.exceptions
-from requests.packages.urllib3.util import Retry
+import urllib3.exceptions
+from urllib3.util import Retry
 
 from typing import TYPE_CHECKING
 
@@ -23,7 +23,7 @@ from e3.fs import rm
 
 if TYPE_CHECKING:
     from types import TracebackType
-    from typing import Any, Deque, Optional
+    from typing import Any, Deque
     from collections.abc import Callable
     from requests.auth import AuthBase
     from requests.models import Response
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 logger = e3.log.getLogger("net.http")
 
 
-def get_filename(content_disposition: str) -> Optional[str]:
+def get_filename(content_disposition: str) -> str | None:
     """Return a filename from a HTTP Content-Disposition header.
 
     :param content_disposition: a Content-Disposition header string
@@ -43,7 +43,7 @@ def get_filename(content_disposition: str) -> Optional[str]:
 
 
 class HTTPError(E3Error):
-    def __init__(self, msg: str, status: Optional[int] = None) -> None:
+    def __init__(self, msg: str, status: int | None = None) -> None:
         """Initialize an HTTPError exception.
 
         :param msg: an error message
@@ -66,7 +66,7 @@ class BaseURL:
         """
         self.url = url
 
-    def get_auth(self) -> Optional[tuple[str, str] | AuthBase]:
+    def get_auth(self) -> tuple[str, str] | AuthBase | None:
         """Return auth requests parameter.
 
         :return: authentication associated with the url
@@ -78,11 +78,10 @@ class BaseURL:
 
 
 class HTTPSession:
-
     CHUNK_SIZE = 1024 * 1024
     DEFAULT_TIMEOUT = (60, 60)
 
-    def __init__(self, base_urls: Optional[list[str | BaseURL]] = None):
+    def __init__(self, base_urls: list[str | BaseURL] | None = None):
         """Initialize HTTP session.
 
         :param base_urls: list of urls used as prefix to subsequent requests.
@@ -96,7 +95,7 @@ class HTTPSession:
         else:
             self.base_urls = deque([None])
         self.session = requests.Session()
-        self.last_base_url: Optional[BaseURL] = None
+        self.last_base_url: BaseURL | None = None
 
     def __enter__(self) -> HTTPSession:
         self.session.__enter__()
@@ -104,18 +103,18 @@ class HTTPSession:
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.session.__exit__(exc_type, exc_val, exc_tb)
 
     def set_max_retries(
         self,
-        base_url: Optional[str] = None,
-        connect: Optional[int] = None,
-        read: Optional[int] = None,
-        redirect: Optional[int] = None,
+        base_url: str | None = None,
+        connect: int | None = None,
+        read: int | None = None,
+        redirect: int | None = None,
     ) -> None:
         """Retry configuration.
 
@@ -142,7 +141,7 @@ class HTTPSession:
         self,
         method: str,
         url: str,
-        data_streams: Optional[dict[str, Any]] = None,
+        data_streams: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Response:
         """Send a request.
@@ -222,7 +221,7 @@ class HTTPSession:
             except (
                 socket.timeout,
                 requests.exceptions.RequestException,
-                requests.packages.urllib3.exceptions.HTTPError,
+                urllib3.exceptions.HTTPError,
             ) as e:
                 # got an error with that base url so put it last in our list
                 error_msgs.append(f"{message_prefix}{e}")
@@ -238,22 +237,24 @@ class HTTPSession:
         self,
         url: str,
         dest: str,
-        filename: Optional[str] = None,
-        validate: Optional[Callable[[str], bool]] = None,
+        filename: str | None = None,
+        validate: Callable[[str], bool] | None = None,
         exception_on_error: bool = False,
-    ) -> Optional[str]:
+        **kwargs: Any,
+    ) -> str | None:
         """Download a file.
 
         :param url: the url to GET
         :param dest: local directory path for the downloaded file
-        :param filename: the local path whether to store this resource, by
-            default use the name provided  in the ``Content-Disposition``
+        :param filename: the local path where to store this resource, by
+            default uses the name provided in the ``Content-Disposition``
             header.
         :param validate: function to call once the download is complete for
             detecting invalid / corrupted download. Takes the local path as
             parameter and returns a boolean.
-        :param exception_on_error: if True raise an exception in case download
+        :param exception_on_error: if True raises an exception in case download
             fails instead of returning None.
+        :param kwargs: additional parameters for the request
         :return: the name of the file or None if there is an error
         """
         # When using stream=True, Requests cannot release the connection back
@@ -263,7 +264,7 @@ class HTTPSession:
         path = None
         try:
             with contextlib.closing(
-                self.request(method="GET", url=url, stream=True)
+                self.request(method="GET", url=url, stream=True, **kwargs)
             ) as response:
                 content_length = int(response.headers.get("content-length", 0))
                 e3.log.debug(response.headers)

@@ -25,7 +25,7 @@ from e3.text import bytes_as_str
 
 
 if TYPE_CHECKING:
-    from typing import cast, Any, IO, List, Literal, NoReturn, Optional, Union
+    from typing import cast, Any, IO, List, Literal, NoReturn, Union
 
     CmdLine = List[str]
     AnyCmdLine = Union[List[CmdLine], CmdLine]
@@ -56,10 +56,12 @@ cmdlogger = e3.log.getLogger(CMD_LOGGER_NAME)
 try:
     import psutil
     from psutil import Popen
-except ImportError:  # defensive code
-    from subprocess import Popen
 
-    psutil = None
+    has_psutil = True
+except ImportError:  # defensive code
+    from subprocess import Popen  # type: ignore
+
+    has_psutil = False
 
 
 def subprocess_setup() -> None:
@@ -74,7 +76,7 @@ def subprocess_setup() -> None:
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # all: no cover
 
 
-def get_rlimit(platform: Optional[str] = None) -> str:
+def get_rlimit(platform: str | None = None) -> str:
     if platform is None:
         platform = e3.env.Env().build.platform
     if platform == "x86_64-windows64":
@@ -231,13 +233,18 @@ class Run:
     def __init__(
         self,
         cmds: AnyCmdLine,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
         output: STDOUT_VALUE | DEVNULL_VALUE | PIPE_VALUE | str | IO | None = PIPE,
         error: STDOUT_VALUE | DEVNULL_VALUE | PIPE_VALUE | str | IO | None = STDOUT,
-        input: DEVNULL_VALUE | PIPE_VALUE | str | IO | None = None,  # noqa: A002
+        input: DEVNULL_VALUE  # noqa: A002
+        | PIPE_VALUE
+        | str
+        | bytes
+        | IO
+        | None = None,  # noqa: A002
         bg: bool = False,
-        timeout: Optional[int] = None,
-        env: Optional[dict] = None,
+        timeout: int | None = None,
+        env: dict | None = None,
         set_sigpipe: bool = True,
         parse_shebang: bool = False,
         ignore_environ: bool = True,
@@ -354,9 +361,9 @@ class Run:
         self.output_file = File(output, "w")
         self.error_file = File(error, "w")
 
-        self.status: Optional[int] = None
-        self.raw_out = b""
-        self.raw_err: Optional[bytes] = b""
+        self.status: int | None = None
+        self.raw_out: bytes | None = b""
+        self.raw_err: bytes | None = b""
         self.cmds = []
 
         if env is not None:
@@ -419,7 +426,7 @@ class Run:
                 self.internal = Popen(self.cmds[0], **popen_args)
 
             else:
-                runs: list[subprocess.Popen] = []
+                runs: list[Popen] = []
                 for index, cmd in enumerate(self.cmds):
                     if index == 0:
                         stdin: int | IO[Any] = self.input_file.fd
@@ -477,17 +484,17 @@ class Run:
             self.wait()
 
     @property
-    def out(self) -> str:
+    def out(self) -> str | None:
         """Process output as string.
 
         Attempt is done to decode as utf-8 the output. If the output is not in
         utf-8 a string representation will be returned
         (see e3.text.bytes_as_str).
         """
-        return bytes_as_str(self.raw_out)
+        return bytes_as_str(self.raw_out) if self.raw_out is not None else None
 
     @property
-    def err(self) -> Optional[str]:
+    def err(self) -> str | None:
         """Process error as string.
 
         Attempt is done to decode as utf-8 the output. If the output is not in
@@ -551,7 +558,7 @@ class Run:
         ):
             self.status = self.internal.wait()
         else:
-            tmp_input: Optional[str | bytes] = None
+            tmp_input: str | bytes | None = None
             if self.input_file.fd == subprocess.PIPE:
                 tmp_input = self.input_file.get_command()
 
@@ -564,7 +571,7 @@ class Run:
         self.close_files()
         return self.status
 
-    def poll(self) -> Optional[int]:
+    def poll(self) -> int | None:
         """Check the process status and set self.status if available.
 
         This method checks whether the underlying process has exited
@@ -609,7 +616,7 @@ class Run:
 
     def is_running(self) -> bool:
         """Check whether the process is running."""
-        if psutil is None:  # defensive code
+        if not has_psutil:  # defensive code
             # psutil not imported, use our is_running function
             return is_running(self.pid)
         else:
@@ -617,7 +624,7 @@ class Run:
 
     def children(self) -> list[Any]:
         """Return list of child processes (using psutil)."""
-        if psutil is None:  # defensive code
+        if not has_psutil:  # defensive code
             raise NotImplementedError("Run.children() require psutil")
         return self.internal.children()
 
@@ -628,8 +635,9 @@ class File:
     def __init__(self, name: Any, mode: str = "r"):
         """Create a new File.
 
-        :param name: can be PIPE, STDOUT, a filename string, an opened fd, a
-            python file object, or a command to pipe (if starts with ``|``)
+        :param name: can be PIPE, STDOUT, a filename string, bytes, an opened
+            fd, a python file object, or a command to pipe
+            (if starts with ``|``)
         :param mode: can be 'r' or 'w' if name starts with + the mode will be
             a+
         """
@@ -638,7 +646,9 @@ class File:
 
         self.name = name
         self.to_close = False
-        if isinstance(name, str):
+        if isinstance(name, bytes) and mode == "r" and name.startswith(b"|"):
+            self.fd = subprocess.PIPE
+        elif isinstance(name, str):
             # can be a pipe or a filename
             if mode == "r" and name.startswith("|"):
                 self.fd = subprocess.PIPE
@@ -661,7 +671,7 @@ class File:
             # this is a file descriptor
             self.fd = name
 
-    def get_command(self) -> Optional[str]:
+    def get_command(self) -> str | None:
         """Return the command to run to create the pipe."""
         if self.fd == subprocess.PIPE:
             return self.name[1:]
@@ -679,7 +689,7 @@ class WaitError(Exception):
     pass
 
 
-def wait_for_processes(process_list: list[Run], timeout: float) -> Optional[int]:
+def wait_for_processes(process_list: list[Run], timeout: float) -> int | None:
     """Wait for several processes spawned with Run.
 
     :param process_list: a list of Run objects
@@ -838,7 +848,7 @@ def kill_process_tree(pid: int | Any, timeout: int = 3) -> bool:
         except psutil.NoSuchProcess:  # defensive code
             pass
 
-    def on_terminate(p: str) -> None:
+    def on_terminate(p: psutil.Process) -> None:
         """Log info when a process terminate."""
         logger.debug("process %s killed", p)
 

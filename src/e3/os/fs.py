@@ -21,7 +21,7 @@ import e3.error
 import e3.log
 
 if TYPE_CHECKING:
-    from typing import Any, Literal, Optional
+    from typing import Any, Literal
     from collections.abc import Callable
 
 
@@ -81,7 +81,7 @@ def chmod(mode: str, filename: str) -> int:
         actions = re.findall(r"(?:([-\+=])?([ugo]|[0-7]+|[rwx]*))", actionlist)
         assert "".join(list(itertools.chain.from_iterable(actions))) == actionlist
 
-        for (op, permlist) in actions:
+        for op, permlist in actions:
             if permlist == "" and op != "=":
                 continue
             else:
@@ -173,13 +173,13 @@ def df(path: str, full: bool = False) -> int | tuple:
             ((1, "path"), (2, "freeuserspace"), (2, "totalspace"), (2, "freespace")),
         )
 
-        def GetDiskFreeSpaceEx_errcheck(result, func, args):  # type: ignore
+        def GetDiskFreeSpaceEx_errcheck(result, func, args):
             del func
             if not result:  # defensive code
                 raise ctypes.WinError()
             return (args[1].value, args[2].value, args[3].value)
 
-        GetDiskFreeSpaceEx.errcheck = GetDiskFreeSpaceEx_errcheck  # type: ignore
+        GetDiskFreeSpaceEx.errcheck = GetDiskFreeSpaceEx_errcheck
         _, total, free = GetDiskFreeSpaceEx(c_path)
         used = total - free
     else:  # windows: no cover
@@ -305,7 +305,7 @@ def unixpath(path: str) -> str:
         return path
 
 
-def which(prog: str, paths: Optional[str] = None, default: Any = "") -> Any:
+def which(prog: str, paths: str | None = None, default: Any = "") -> Any:
     """Locate executable.
 
     :param prog: program to find

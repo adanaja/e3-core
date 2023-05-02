@@ -5,15 +5,12 @@ import os
 import re
 import struct
 import sys
+from typing import TYPE_CHECKING
 from enum import Enum
 from dataclasses import asdict
 from pprint import pformat
-from typing import TYPE_CHECKING
 
 import e3.log
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 logger = e3.log.getLogger("e3.sys")
 
@@ -38,9 +35,7 @@ class RewriteImportRule:
         reject = 0
         skip = 1
 
-    def __init__(
-        self, module: str, name: str = ".*", action: Optional[RuleAction] = None
-    ):
+    def __init__(self, module: str, name: str = ".*", action: RuleAction | None = None):
         """Initialize the object.
 
         :param module: regexp suitable for re.match() to match against the
@@ -66,21 +61,18 @@ class RewriteImportRule:
         check_in_names = None
 
         if isinstance(node, ast.ImportFrom):
-
             # node: ImportFrom(module, names)
             # first check whether the module match our rule
 
             if TYPE_CHECKING:
                 assert node.module is not None
             if re.match("^" + self.module + "$", node.module):
-
                 # then we need to check whether our 'name' is in the
                 # 'from' list (node.names)
 
                 check_in_names = self.name
 
         elif isinstance(node, ast.Import):
-
             # node: Import(names)
             # We need to check whether our 'module' appears in the imported
             # module names
@@ -228,7 +220,7 @@ def set_python_env(prefix: str) -> None:
         env.add_dll_path(os.path.join(prefix, "lib"))
 
 
-def interpreter(prefix: Optional[str] = None) -> str:
+def interpreter(prefix: str | None = None) -> str:
     """Return location of the Python interpreter.
 
     When there are both a python3 and python binary file return the path to
@@ -259,7 +251,7 @@ def interpreter(prefix: Optional[str] = None) -> str:
             return os.path.join(prefix, "bin", "python")
 
 
-def python_script(name: str, prefix: Optional[str] = None) -> list[str]:
+def python_script(name: str, prefix: str | None = None) -> list[str]:
     """Return path to scripts contained in this Python distribution.
 
     :param name: the script name
@@ -336,16 +328,15 @@ def is_console() -> bool:
     # First check using isatty call. On Windows isatty will return True only
     # if in a Win32 console (for example cygwin or msys ptys are not win32
     # consoles).
-    is_tty = os.isatty(stdin_fd)  # type: ignore
+    is_tty = os.isatty(stdin_fd)
     if is_tty:
         return True
 
     if sys.platform == "win32":  # unix: no cover
-
         from msvcrt import get_osfhandle
         from e3.os.windows.object import object_name
 
-        stdin_name = object_name(get_osfhandle(stdin_fd))  # type: ignore
+        stdin_name = object_name(get_osfhandle(stdin_fd))
         if re.match(r"\\Device\\NamedPipe\\(cygwin|msys).*-pty.*$", stdin_name):
             return True
         else:
@@ -355,9 +346,9 @@ def is_console() -> bool:
 
 
 def relocate_python_distrib(
-    python_distrib_dir: Optional[str] = None,
+    python_distrib_dir: str | None = None,
     freeze: bool = False,
-    platform: Optional[str] = None,
+    platform: str | None = None,
 ) -> None:
     """Adjust shebangs to freeze a Python distrib or make it relocatable.
 
